@@ -161,123 +161,143 @@ function mcserver {
 # mcssh: SSH INTO MCCOY GROUP SERVER
 #     adds params to ssh from mcserver
 
-MCSSH_FLAGS="46AaCfgKkMNnqTtVvXxYyZ:b:c:D:E:e:F:f:i:I:J:L:l:m:O:o:p:Q:S:W:w:";
-function mcssh {
+MCSSH_FLAGS="46AaCfgKkMNnqPTtVvXxYyZ:b:c:D:E:e:F:f:i:I:J:L:l:m:O:o:p:Q:S:W:w:";
+function _mcssh_like {
 
-  local default_port;
-  local port_arg;
-  local server;
-  local opt;
-  local opt_string;
-  local after_args;
-  local cmd;
-  local OPTARG;
-  local OPTIND;
-  local server_config;
-  local opt_whitespace;
-  local fp;
-  local args;
-  local conn;
-  local all_flags;
-  local hyak;
-  local host;
+    local base_cmd;
+    local default_port;
+    local caps_port;
+    local port_flag;
+    local port_arg;
+    local server;
+    local opt;
+    local opt_string;
+    local after_args;
+    local cmd;
+    local OPTARG;
+    local OPTIND;
+    local server_config;
+    local opt_whitespace;
+    local fp;
+    local args;
+    local conn;
+    local all_flags;
+    local hyak;
+    local host;
 
-  ### Specification of the port
+    base_cmd=$1; shift;
 
-  opt_string="";
-  after_args="";
-  server_config="";
-  all_flags=":$MCSSH_FLAGS$MCSERVER_FLAGS";
-  while getopts "$all_flags" opt; do
-    case "$opt" in
-      s|u)
-        if [ "$server_config" == "" ]
-          then
-            server_config="-$opt $OPTARG"
-          else
-            server_config="$server_config -$opt $OPTARG"
-        fi
-        ;;
+    ### Specification of the port
 
-      L|g)
-        if [ "$after_args" == "" ]
-          then
-            after_args="-$opt $OPTARG"
-          else
-            after_args="$after_args -$opt $OPTARG"
+    opt_string="";
+    after_args="";
+    server_config="";
+    all_flags=":$MCSSH_FLAGS$MCSERVER_FLAGS";
+    port_flag="p";
+    while getopts "$all_flags" opt; do
+      case "$opt" in
+        s|u)
+          if [ "$server_config" == "" ]
+            then
+              server_config="-$opt $OPTARG"
+            else
+              server_config="$server_config -$opt $OPTARG"
           fi
           ;;
-      h)
-        if [ "$OPTARG" == "" ]
-          then
-            hyak="hyak";
-          else
-            hyak="$OPTARG"
+
+        L|g)
+          if [ "$after_args" == "" ]
+            then
+              after_args="-$opt $OPTARG"
+            else
+              after_args="$after_args -$opt $OPTARG"
+            fi
+            ;;
+        h)
+          if [ "$OPTARG" == "" ]
+            then
+              hyak="hyak";
+            else
+              hyak="$OPTARG"
+          fi
+          if [ "$server_config" == "" ]
+            then
+              server_config="-$opt $hyak"
+            else
+              server_config="$server_config -$opt $hyak"
+          fi
+          ;;
+        P)
+          port_flag="P";
+          ;;
+        p)
+          port_arg="$OPTARG";
+          ;;
+        Z)
+          conn="$OPTARG"
+          ;;
+        *)
+          if [ "$opt_string" != "" ]
+            then opt_whitespace=" ";
+            else opt_whitespace="";
+          fi;
+          if [ "$OPTARG" != "" ]
+            then opt_string="$opt_string$opt_whitespace-$opt $OPTARG"
+            else opt_string="$opt_string$opt_whitespace-$opt"
+          fi
+          ;;
+      esac;
+    done
+    shift "$((OPTIND -1))";
+
+    server=$(mcserver $server_config);
+    if [ "$hyak" == "" ]
+      then
+        host=$(_get_host "$server");
+        if [ "$host" == "hyak.uw.edu" ]
+          then hyak="hyak";
         fi
-        if [ "$server_config" == "" ]
-          then
-            server_config="-$opt $hyak"
-          else
-            server_config="$server_config -$opt $hyak"
-        fi
-        ;;
-      p)
-        port_arg="$OPTARG"
-        ;;
-      Z)
-        conn="$OPTARG"
-        ;;
-      *)
-        if [ "$opt_string" != "" ]
-          then opt_whitespace=" ";
-          else opt_whitespace="";
-        fi;
-        if [ "$OPTARG" != "" ]
-          then opt_string="$opt_string$opt_whitespace-$opt $OPTARG"
-          else opt_string="$opt_string$opt_whitespace-$opt"
-        fi
-        ;;
-    esac;
-  done
-  shift "$((OPTIND -1))";
+    fi;
+    cmd=$(_add_port_arg "$cmd" "$port_flag" "$port_arg" "$hyak");
+    cmd=$(_add_connection_arg "$cmd" "$server" "$conn");
 
-  server=$(mcserver $server_config);
-  if [ "$hyak" == "" ]
-    then
-      host=$(_get_host "$server");
-      if [ "$host" == "hyak.uw.edu" ]
-        then hyak="hyak";
-      fi
-  fi;
-  cmd=$(_add_port_arg "$cmd" "p" "$port_arg" "$hyak");
-  cmd=$(_add_connection_arg "$cmd" "$server" "$conn");
+    if [ "$opt_string" != "" ]
+      then opt_string=" $opt_string"
+    fi
+    if [ "$after_args" != "" ]
+      then after_args=" $after_args"
+    fi
+    cmd="$cmd$opt_string $server$after_args"
 
-  if [ "$opt_string" != "" ]
-    then opt_string=" $opt_string"
-  fi
-  if [ "$after_args" != "" ]
-    then after_args=" $after_args"
-  fi
-  cmd="$cmd$opt_string $server$after_args"
+    fp="$1";
+    shift;
 
-  fp="$1";
-  shift;
+    args="$@";
 
-  args="$@";
+    if [ "$fp" != "" ];
+      then cmd="$cmd:$fp";
+    fi
 
-  if [ "$fp" != "" ];
-    then cmd="$cmd:$fp";
-  fi
+    if [ "$args" != "" ];
+      then cmd="$cmd $args";
+    fi
 
-  if [ "$args" != "" ];
-    then cmd="$cmd $args";
-  fi
-
-  # echo "$cmd"
-  ssh $cmd
+    echo "$base_cmd $cmd"
+    # echo $base_cmd $cmd
 
 }
 
+function mcssh {
+
+  $(_mcssh_like ssh $@)
+
+}
+
+function mcsftp {
+
+  $(_mcssh_like sftp -P $@)
+
+}
 
 ############################################################################
 ###########################       SCP          #############################
@@ -287,7 +307,9 @@ function mcssh {
 #     adds params to scp from mcserver
 
 MCSCP_FLAGS="UEZ:u:s:346BCpqrvF:i:l:o:P:S:";
-function mcscp {
+function _mcscp_like {
+
+  local base_cmd;
   local conn;
   local default_port;
   local port_flag;
@@ -308,6 +330,7 @@ function mcscp {
   local use_persistent;
   local all_flags;
 
+  base_cmd="$1"; shift;
   opt_string="";
   server_config="";
   echo_command=0;
@@ -383,10 +406,15 @@ function mcscp {
     then echo "$opt_string$file_1 $file_2";
   fi
 
-  scp $opt_string"$file_1" "$file_2";
+  echo "$base_cmd" $opt_string"$file_1" "$file_2";
 
 }
 
+function mcscp {
+
+  $(_mcscp_like scp $@)
+
+}
 ############################################################################
 ############################  UPLOAD/DOWNLOAD  #############################
 ############################################################################
